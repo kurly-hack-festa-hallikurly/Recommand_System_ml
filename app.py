@@ -12,7 +12,7 @@ import random
 # order_product_train = pd.read_csv('../order_products__train.csv')
 # orders = pd.read_csv('../orders.csv')
 # products = pd.read_csv('../products.csv')
-id_name = pd.read_csv('./dataset/id_name.csv')
+id_name = pd.read_csv('./id_name.csv')
 
 app = Flask(__name__) #flask 앱 초기화
 
@@ -177,9 +177,9 @@ def predict():
 
     ## 물류 재고 상황 먼저 고려 ##
     # ->고객 이전 구매 12번 내에 해당 상품이 3번 구매한 이력이 있으면 먼저 컬리백으로 구성
-    kurlybag = []  # 총 7개추천
-    num = 0
-    
+    # kurlybag = []  # 총 7개추천
+    # num = 0
+    #
 
     ## 후보군 생성 ##
     pred = model.predict([tf.keras.preprocessing.sequence.pad_sequences(df['products']),
@@ -197,19 +197,21 @@ def predict():
 
 
     ## ranking ## - 물류 재고 현황 고려, 소진 상품 고려
-
+    kurlybag = []  # 총 7개추천
+    num = 0
 
     products_set = set(products) #24시간에 한번 업데이트
     sold_set = set(sold_out) #5분마다 업데이트
     products = list(products_set - sold_set) #(4일 남은 재고 - 소진된 상품)으로 재고 데이터 업데이트
 
-    # for p in (products):
-    #     if num > 8:
-    #         break
-    #     if p in candidate:
-    #         kurlybag.append(p)
-    #         num += 1
-    #         candidate.remove(p)
+
+    for p in (products):
+        if num > 8:
+            break
+        if p in candidate:
+            kurlybag.append(p)
+            num += 1
+            candidate.remove(p)
     if num < 8:
         more = 8-num
         kurlybag += candidate[:more]
