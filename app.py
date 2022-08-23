@@ -134,9 +134,9 @@ model.load_weights('kur_weight')
 ##############################################################
 
 products, datediff = [], []
-def put_stocks(pd):
+def put_stocks(prod):
     global products
-    products = pd
+    products = prod
 
 sold_out = []
 def put_sold(s_out):
@@ -170,16 +170,25 @@ def predict():
     global products
     info = request.get_json()
     # user_id = info['user_id'] #고객 id
-    # products = info['products'] #이전 구매목록 12개
+    prior_products = info['products'] #이전 구매목록 12개
     # order_dow = info['order_dow'] #이전 구매 요일 12개 리스트
     # order_hour_of_day = info['order_hour_of_day'] #이전 구매 시간 12개 리스트
     df = pd.DataFrame(info, columns = ['products', 'order_dow', 'order_hour_of_day'])
 
     ## 물류 재고 상황 먼저 고려 ##
-    # ->고객 이전 구매 12번 내에 해당 상품이 3번 구매한 이력이 있으면 먼저 컬리백으로 구성
-    # kurlybag = []  # 총 7개추천
-    # num = 0
-    #
+    # ->고객 이전 구매 12번 내에 해당 상품을 구매한 이력이 있으면 먼저 컬리백으로 구성
+    products_set = set(products)  # 24시간에 한번 업데이트
+    sold_set = set(sold_out)  # 5분마다 업데이트
+    products = list(products_set - sold_set)  # (4일 남은 재고 - 소진된 상품)으로 재고 데이터 업데이트
+
+    kurlybag = []  # 총 7개추천
+    num = 0
+    for prior_pd in prior_products[0]:
+        if num > 8:
+            break
+        if prior_pd in products:
+            kurlybag.append(prior_pd)
+            num += 1
 
     ## 후보군 생성 ##
     pred = model.predict([tf.keras.preprocessing.sequence.pad_sequences(df['products']),
@@ -195,24 +204,8 @@ def predict():
     candidate = np.unique(candidate) #top 15개 상품 리스트
     candidate = candidate.tolist()
 
-
-    ## ranking ## - 물류 재고 현황 고려, 소진 상품 고려
-    kurlybag = []  # 총 7개추천
-    num = 0
-
-    products_set = set(products) #24시간에 한번 업데이트
-    sold_set = set(sold_out) #5분마다 업데이트
-    products = list(products_set - sold_set) #(4일 남은 재고 - 소진된 상품)으로 재고 데이터 업데이트
-
-
-    for p in (products):
-        if num > 8:
-            break
-        if p in candidate:
-            kurlybag.append(p)
-            num += 1
-            candidate.remove(p)
     if num < 8:
+        candidate = list(set(candidate)-set(kurlybag))
         more = 8-num
         kurlybag += candidate[:more]
 
@@ -229,4 +222,6 @@ def predict():
     return kur_df.to_dict('records')
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    from waitress import serve
+    serve(app, host="0.0.0.0", port=5000)
+    #app.run(debug=True)
